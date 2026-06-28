@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { TrendingUp, Target, Sparkles, MessageCircle, Send, Award } from 'lucide-react';
 
 export default function DashboardPage() {
-    const { user, dbUser, loading: authLoading } = useAuth();
+    const { user, loading: authLoading } = useAuth();
     const [dashboard, setDashboard] = useState<any>(null);
     const [announcements, setAnnouncements] = useState<any[]>([]);
     const [quizPlaylists, setQuizPlaylists] = useState<any[]>([]);
@@ -14,12 +14,9 @@ export default function DashboardPage() {
     const [current, setCurrent] = useState(0);
 
     useEffect(() => {
-        if (authLoading || !user) return;
+        if (authLoading) return;
         const load = async () => {
             try {
-                const token = await user.getIdToken();
-                setAuthToken(token);
-
                 const [d, a, q] = await Promise.all([
                     dataService.getDashboard(), 
                     dataService.getAnnouncements(),
@@ -28,11 +25,14 @@ export default function DashboardPage() {
                 setDashboard(d);
                 setAnnouncements(a);
                 setQuizPlaylists(q);
-            } catch (e) { console.error(e); }
-            finally { setLoading(false); }
+            } catch (e) { 
+                console.error(e); 
+            } finally { 
+                setLoading(false); 
+            }
         };
         load();
-    }, [authLoading, user]);
+    }, [authLoading]);
 
     useEffect(() => {
         if (!announcements.length) return;
@@ -40,7 +40,7 @@ export default function DashboardPage() {
         return () => clearInterval(t);
     }, [announcements.length]);
 
-    const displayName = dbUser?.name || 'Student';
+    const displayName = user?.name || 'Student';
     const initials = displayName.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase() || 'S';
 
     if (loading || authLoading) return (

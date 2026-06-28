@@ -1,40 +1,83 @@
 const asyncHandler = require('express-async-handler');
+const jwt = require('jsonwebtoken');
 const User = require('../models/userModel');
 const Course = require('../models/courseModel');
 const Test = require('../models/testModel');
 const Announcement = require('../models/announcementModel');
 const QuizPlaylist = require('../models/quizPlaylistModel');
-const admin = require('../config/firebase-admin');
+const TestAttempt = require('../models/testAttemptModel');
 
-// @desc    Delete user (Admin only)
-// @route   DELETE /api/users/:id
-// @access  Private/Admin
-const deleteUser = asyncHandler(async (req, res) => {
-    const user = await User.findById(req.params.id);
+// ─── Helper: Generate JWT ────────────────────────────────────────────────────
+const generateToken = (id) => {
+    return jwt.sign({ id }, process.env.JWT_SECRET, { expiresIn: '30d' });
+};
+
+// @desc    Login or Register a student by mobile number
+// @route   POST /api/users/login
+// @access  Public
+const loginOrRegister = asyncHandler(async (req, res) => {
+    const { mobile, name, age, city, state, pincode } = req.body;
+
+    if (!mobile || !name) {
+        res.status(400);
+        throw new Error('Mobile number and name are required');
+    }
+
+    // Normalize mobile: strip spaces, ensure 10 digits
+    const normalizedMobile = mobile.replace(/\D/g, '').slice(-10);
+    if (normalizedMobile.length !== 10) {
+        res.status(400);
+        throw new Error('Please enter a valid 10-digit mobile number');
+    }
+
+    // Try to find existing user by mobile
+    let user = await User.findOne({ mobile: normalizedMobile });
 
     if (user) {
-        // Delete from Firebase Auth if firebaseUid exists
-        if (user.firebaseUid) {
-            try {
-                await admin.auth().deleteUser(user.firebaseUid);
-                console.log('User deleted from Firebase Auth:', user.firebaseUid);
-            } catch (fbError) {
-                // If user is already deleted from Firebase, we can ignore and continue
-                console.error('Error deleting user from Firebase:', fbError.message);
-            }
-        }
-
-        // Delete their test attempts
-        await TestAttempt.deleteMany({ user: user._id });
-        await user.deleteOne();
-        res.json({ message: 'User removed' });
+        // Returning user — update their profile details if provided
+        if (name) user.name = name;
+        if (age) user.age = age;
+        if (city) user.city = city;
+        if (state) user.state = state;
+        if (pincode) user.pincode = pincode;
+        await user.save();
     } else {
-        res.status(404);
-        throw new Error('User not found');
+        // New user — create account
+        user = await User.create({
+            mobile: normalizedMobile,
+            name,
+            age: age || '',
+            city: city || '',
+            state: state || '',
+            pincode: pincode || '',
+            role: 'student',
+        });
     }
+
+    // Generate JWT and return
+    const token = generateToken(user._id);
+
+    res.json({
+        token,
+        user: {
+            _id: user._id,
+            name: user.name,
+            mobile: user.mobile,
+            age: user.age,
+            city: user.city,
+            state: user.state,
+            pincode: user.pincode,
+            role: user.role,
+            enrolledCourses: user.enrolledCourses || [],
+            purchasedQuizzes: user.purchasedQuizzes || [],
+            purchasedPlaylists: user.purchasedPlaylists || [],
+        },
+    });
 });
+
+// @desc    Get user profile
 // @route   GET /api/users/profile
-// @access  Private (Clerk protected)
+// @access  Private
 const getUserProfile = asyncHandler(async (req, res) => {
     const user = await User.findById(req.user._id);
 
@@ -59,60 +102,37 @@ const getUserProfile = asyncHandler(async (req, res) => {
     }
 });
 
-// @desc    Sync user after Clerk/Firebase login (called by client after first sign-in)
-// @route   POST /api/users/sync
-// @access  Private (Requires Firebase Auth token)
-const syncUser = asyncHandler(async (req, res) => {
-    let user = req.user;
+// @desc    Update user profile
+// @route   PUT /api/users/profile
+// @access  Private
+const updateUserProfile = asyncHandler(async (req, res) => {
+    const user = await User.findById(req.user._id);
 
-    // If user doesn't exist in DB but they have a valid Firebase UID
-    if (!user && req.firebaseUid) {
-        // 1. Check if a manually joined user exists with matching email or mobile (without UID)
-        const filters = [];
-        if (req.firebaseMobile) filters.push({ mobile: req.firebaseMobile });
-        // NOTE: Firebase tokens might not always have email depending on login method, 
-        // but if it's there and not a placeholder, we could use it too.
-        
-        let existingManualUser = null;
-        if (filters.length > 0) {
-            existingManualUser = await User.findOne({ 
-                $or: filters,
-                firebaseUid: { $exists: false } 
-            });
-        }
+    if (user) {
+        user.name = req.body.name ?? user.name;
+        user.mobile = req.body.mobile ?? user.mobile;
+        user.age = req.body.age ?? user.age;
+        user.city = req.body.city ?? user.city;
+        user.state = req.body.state ?? user.state;
+        user.pincode = req.body.pincode ?? user.pincode;
 
-        if (existingManualUser) {
-            // MERGE: Attach Firebase UID to the manual record
-            existingManualUser.firebaseUid = req.firebaseUid;
-            user = await existingManualUser.save();
-            console.log('Successfully merged manual user with Firebase account:', user.firebaseUid);
-        } else {
-            // NEW: Create a fresh record
-            user = await User.create({
-                firebaseUid: req.firebaseUid,
-                name: 'New User',
-                email: `${req.firebaseUid}@placeholder.com`,
-                mobile: req.firebaseMobile || '',
-                role: 'student'
-            });
-            console.log('Successfully auto-created missing user via /sync:', user.firebaseUid);
-        }
-    } else if (!user) {
-         res.status(401);
-         throw new Error('Not authorized');
+        const updatedUser = await user.save();
+
+        res.json({
+            _id: updatedUser._id,
+            name: updatedUser.name,
+            email: updatedUser.email,
+            mobile: updatedUser.mobile,
+            age: updatedUser.age,
+            city: updatedUser.city,
+            state: updatedUser.state,
+            pincode: updatedUser.pincode,
+            role: updatedUser.role,
+        });
+    } else {
+        res.status(404);
+        throw new Error('User not found');
     }
-
-    // Return the profile
-    res.json({
-        _id: user._id,
-        name: user.name,
-        email: user.email,
-        mobile: user.mobile,
-        role: user.role,
-        enrolledCourses: user.enrolledCourses || [],
-        purchasedQuizzes: user.purchasedQuizzes || [],
-        purchasedPlaylists: user.purchasedPlaylists || [],
-    });
 });
 
 // @desc    Get leaderboard (top students for the currently active quiz)
@@ -127,26 +147,22 @@ const getLeaderboard = asyncHandler(async (req, res) => {
     }
 
     const testIds = activeTests.map(t => t._id);
-    const TestAttempt = require('../models/testAttemptModel');
 
     // Combine titles
     const combinedTitle = activeTests.map(t => t.title).join(' / ');
 
     // 2. Fetch Attempts for all active tests
-    // Sort by createdAt ASC so we encounter the absolute FIRST attempt first
     const attempts = await TestAttempt.find({ test: { $in: testIds } })
         .populate('user', 'name email role')
         .sort({ createdAt: 1 });
 
-    // 3. Process attempts: we want only the absolute FIRST attempt per student across ANY active test
-    // Map structure: userId => attempt_object
+    // 3. Process attempts
     const studentAttemptsMap = {};
 
     for (const attempt of attempts) {
         if (attempt.user && attempt.user.role === 'student') {
             const userIdStr = attempt.user._id.toString();
 
-            // Since attempts are sorted by createdAt ASC, the first one we see is the absolute first attempt
             if (!studentAttemptsMap[userIdStr]) {
                 studentAttemptsMap[userIdStr] = {
                     user: attempt.user,
@@ -156,14 +172,8 @@ const getLeaderboard = asyncHandler(async (req, res) => {
                     testMap: { [attempt.test.toString()]: true }
                 };
             } else {
-                // Determine if we should sum up scores from DIFFERENT tests for the same student
-                // The prompt suggests "merging their scores". If a student takes 2 active tests, do they get score A + score B?
-                // The Admin merged endpoint currently just takes the FIRST attempt across ALL selected tests and sets that as the single score.
-                // To truly merge, let's track the first attempt *per test* for each student and sum them.
-                
                 const testIdStr = attempt.test.toString();
                 if (!studentAttemptsMap[userIdStr].testMap[testIdStr]) {
-                    // First attempt at this specific other test, add to sum
                     studentAttemptsMap[userIdStr].score += attempt.score || 0;
                     studentAttemptsMap[userIdStr].timeSpent += attempt.timeSpent || 0;
                     studentAttemptsMap[userIdStr].testMap[testIdStr] = true;
@@ -205,12 +215,10 @@ const getLeaderboard = asyncHandler(async (req, res) => {
 
     res.json({
         quizTitle: combinedTitle,
-        rankings: allRankings.slice(0, 50), // Top 50
+        rankings: allRankings.slice(0, 50),
         currentUserRank: currentUserRank
     });
 });
-
-const TestAttempt = require('../models/testAttemptModel');
 
 // @desc    Get admin dashboard stats
 // @route   GET /api/users/dashboard-stats
@@ -218,7 +226,6 @@ const TestAttempt = require('../models/testAttemptModel');
 const getDashboardStats = asyncHandler(async (req, res) => {
     const studentCount = await User.countDocuments({ role: 'student' });
     
-    // Correctly count paid users: any student who has at least one item in their access arrays
     const paidUserCount = await User.countDocuments({ 
         role: 'student', 
         $or: [
@@ -232,7 +239,6 @@ const getDashboardStats = asyncHandler(async (req, res) => {
     const activeQuizPlaylistCount = await QuizPlaylist.countDocuments({ isActive: true });
     const quizCount = await Test.countDocuments({});
 
-    // Fetch recent admin activities
     const [recentQuizzes, recentCourses, recentAnnouncements] = await Promise.all([
         Test.find().sort({ createdAt: -1 }).limit(5).select('title createdAt'),
         Course.find().sort({ createdAt: -1 }).limit(5).select('title createdAt'),
@@ -263,7 +269,7 @@ const getDashboardStats = asyncHandler(async (req, res) => {
     res.json({
         students: studentCount,
         paidUsers: paidUserCount,
-        courses: activeCourseCount, // Legacy field name
+        courses: activeCourseCount,
         playlists: activeCourseCount + activeQuizPlaylistCount,
         quizzes: quizCount,
         recentActivities: activities,
@@ -271,45 +277,10 @@ const getDashboardStats = asyncHandler(async (req, res) => {
     });
 });
 
-// @desc    Update user profile
-// @route   PUT /api/users/profile
-// @access  Private
-const updateUserProfile = asyncHandler(async (req, res) => {
-    const user = await User.findById(req.user._id);
-
-    if (user) {
-        user.name = req.body.name ?? user.name;
-        user.mobile = req.body.mobile ?? user.mobile;
-        user.age = req.body.age ?? user.age;
-        user.city = req.body.city ?? user.city;
-        user.state = req.body.state ?? user.state;
-        user.pincode = req.body.pincode ?? user.pincode;
-
-        const updatedUser = await user.save();
-
-        res.json({
-            _id: updatedUser._id,
-            name: updatedUser.name,
-            email: updatedUser.email,
-            mobile: updatedUser.mobile,
-            age: updatedUser.age,
-            city: updatedUser.city,
-            state: updatedUser.state,
-            pincode: updatedUser.pincode,
-            role: updatedUser.role,
-        });
-    } else {
-        res.status(404);
-        throw new Error('User not found');
-    }
-});
-
 // @desc    Get user's enrolled courses
 // @route   GET /api/users/my-courses
 // @access  Private
 const getMyCourses = asyncHandler(async (req, res) => {
-    // Currently relying on all active courses being accessible
-    // In a fully developed app with payments, you'd filter by enrollments
     const courses = await Course.find({ isActive: true })
         .populate('instructor', 'name');
     res.json(courses);
@@ -319,7 +290,6 @@ const getMyCourses = asyncHandler(async (req, res) => {
 // @route   GET /api/users/my-attempts
 // @access  Private
 const getMyAttempts = asyncHandler(async (req, res) => {
-    const TestAttempt = require('../models/testAttemptModel');
     const attempts = await TestAttempt.find({ user: req.user._id })
         .populate('test', 'title duration')
         .sort({ createdAt: -1 });
@@ -330,7 +300,6 @@ const getMyAttempts = asyncHandler(async (req, res) => {
 // @route   GET /api/users/my-attempts/:id
 // @access  Private
 const getAttemptById = asyncHandler(async (req, res) => {
-    const TestAttempt = require('../models/testAttemptModel');
     const attempt = await TestAttempt.findOne({ _id: req.params.id, user: req.user._id })
         .populate({
             path: 'test',
@@ -364,12 +333,10 @@ const getUserById = asyncHandler(async (req, res) => {
         .populate('purchasedPlaylists', 'title');
 
     if (user) {
-        // Fetch all attempts sorted oldest to newest to find the FIRST attempt easily
         const allAttempts = await TestAttempt.find({ user: user._id })
             .populate('test', 'title totalMarks')
             .sort({ createdAt: 1 });
 
-        // Filter to keep only the FIRST attempt per test
         const firstAttemptsMap = new Map();
         for (const attempt of allAttempts) {
             if (attempt.test && !firstAttemptsMap.has(attempt.test._id.toString())) {
@@ -377,11 +344,9 @@ const getUserById = asyncHandler(async (req, res) => {
             }
         }
         
-        // Convert map back to array and sort newest first for display
         const attempts = Array.from(firstAttemptsMap.values())
             .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
-        // Calculate if user is paid
         const isPaid = (user.purchasedQuizzes && user.purchasedQuizzes.length > 0) || 
                        (user.purchasedPlaylists && user.purchasedPlaylists.length > 0) ||
                        (user.enrolledCourses && user.enrolledCourses.length > 0);
@@ -431,12 +396,27 @@ const updateUserAdmin = asyncHandler(async (req, res) => {
     }
 });
 
+// @desc    Delete user (Admin only)
+// @route   DELETE /api/users/:id
+// @access  Private/Admin
+const deleteUser = asyncHandler(async (req, res) => {
+    const user = await User.findById(req.params.id);
+
+    if (user) {
+        await TestAttempt.deleteMany({ user: user._id });
+        await user.deleteOne();
+        res.json({ message: 'User removed' });
+    } else {
+        res.status(404);
+        throw new Error('User not found');
+    }
+});
+
 // @desc    Grant access to a specific item (Course/Quiz/Playlist)
 // @route   PUT /api/users/:id/access
 // @access  Private/Admin
 const grantUserAccess = asyncHandler(async (req, res) => {
     const { itemId, type } = req.body;
-    // type should be 'course', 'quiz', or 'playlist'
 
     const user = await User.findById(req.params.id);
 
@@ -464,7 +444,6 @@ const grantUserAccess = asyncHandler(async (req, res) => {
 
     const updatedUser = await user.save();
     
-    // Return updated populated arrays for the frontend
     const populatedUser = await User.findById(updatedUser._id)
         .populate('enrolledCourses', 'title')
         .populate('purchasedQuizzes', 'title')
@@ -478,7 +457,6 @@ const grantUserAccess = asyncHandler(async (req, res) => {
 // @access  Private/Admin
 const revokeUserAccess = asyncHandler(async (req, res) => {
     const { itemId, type } = req.body;
-    // type should be 'course', 'quiz', or 'playlist'
 
     const user = await User.findById(req.params.id);
 
@@ -500,7 +478,6 @@ const revokeUserAccess = asyncHandler(async (req, res) => {
 
     const updatedUser = await user.save();
     
-    // Return updated populated arrays for the frontend
     const populatedUser = await User.findById(updatedUser._id)
         .populate('enrolledCourses', 'title')
         .populate('purchasedQuizzes', 'title')
@@ -515,25 +492,23 @@ const revokeUserAccess = asyncHandler(async (req, res) => {
 const createUserAdmin = asyncHandler(async (req, res) => {
     const { name, email, mobile, role } = req.body;
 
-    if (!name || !email) {
+    if (!name || !mobile) {
         res.status(400);
-        throw new Error('Name and Email are required');
+        throw new Error('Name and Mobile are required');
     }
 
-    // Check if user already exists
-    const userExists = await User.findOne({ $or: [{ email }, { mobile }] });
+    const userExists = await User.findOne({ mobile });
 
     if (userExists) {
         res.status(400);
-        throw new Error('User with this email or mobile already exists');
+        throw new Error('User with this mobile already exists');
     }
 
     const user = await User.create({
         name,
-        email,
+        email: email || undefined,
         mobile,
         role: role || 'student',
-        // firebaseUid is left undefined until they first /sync
     });
 
     if (user) {
@@ -545,8 +520,8 @@ const createUserAdmin = asyncHandler(async (req, res) => {
 });
 
 module.exports = {
+    loginOrRegister,
     getUserProfile,
-    syncUser,
     getLeaderboard,
     getDashboardStats,
     updateUserProfile,

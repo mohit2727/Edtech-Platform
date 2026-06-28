@@ -10,20 +10,11 @@ const apiClient = axios.create({
 
 // ─── Token Management ────────────────────────────────────────────────────────
 let _token: string | null = null;
-let _getToken: (() => Promise<string | null>) | null = null;
 
 export const setAuthToken = (token: string | null) => { _token = token; };
-export const setTokenRefresher = (fn: () => Promise<string | null>) => { _getToken = fn; };
 
 // ─── Request Interceptor: attach token ──────────────────────────────────────
 apiClient.interceptors.request.use(async (config) => {
-    // Refresh token before each request if refresher is available
-    if (_getToken) {
-        try {
-            const fresh = await _getToken();
-            if (fresh) _token = fresh;
-        } catch { /* keep existing token */ }
-    }
     if (_token) {
         config.headers.Authorization = `Bearer ${_token}`;
     }
@@ -38,9 +29,10 @@ apiClient.interceptors.response.use(
         const message = error?.response?.data?.message || error.message;
 
         if (status === 401) {
-            // Token expired or invalid — redirect to sign-in
-            if (typeof window !== 'undefined' && !window.location.pathname.includes('/sign-in') && !window.location.pathname.includes('/onboarding')) {
-                window.location.href = '/sign-in';
+            // Token expired or invalid
+            setAuthToken(null);
+            if (typeof window !== 'undefined') {
+                localStorage.removeItem('authToken');
             }
         } else if (status === 403) {
             return Promise.reject(new Error('You do not have permission to access this resource.'));

@@ -11,16 +11,19 @@ const {
     updateCourse,
     updateLesson,
 } = require('../controllers/courseController');
-const { protect, admin } = require('../middleware/authMiddleware');
+const { optionalAuth, adminProtect } = require('../middleware/authMiddleware');
 
-router.get('/', protect, getCourses);
-router.get('/:id', protect, getCourseById);
-router.post('/', protect, admin, createCourse);
-router.put('/:id/status', protect, admin, updateCourseStatus);
-router.post('/:id/lessons', protect, admin, addLesson);
-router.delete('/:id/lessons/:lessonId', protect, admin, deleteLesson);
-router.put('/:id/lessons/:lessonId', protect, admin, updateLesson);
-router.delete('/:id', protect, admin, deleteCourse);
-router.put('/:id', protect, admin, updateCourse);
+// Public browsing (attach user if logged in for enrollment checks)
+router.get('/', optionalAuth, getCourses);
+router.get('/:id', optionalAuth, getCourseById);
+
+// Admin routes (Firebase Auth)
+router.post('/', adminProtect, createCourse);
+router.put('/:id/status', adminProtect, updateCourseStatus);
+router.post('/:id/lessons', adminProtect, addLesson);
+router.delete('/:id/lessons/:lessonId', adminProtect, deleteLesson);
+router.put('/:id/lessons/:lessonId', adminProtect, updateLesson);
+router.delete('/:id', adminProtect, deleteCourse);
+router.put('/:id', adminProtect, updateCourse);
 
 module.exports = router;

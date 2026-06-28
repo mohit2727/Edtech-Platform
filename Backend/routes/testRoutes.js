@@ -15,20 +15,25 @@ const {
     updateQuestion,
     deleteQuestion
 } = require('../controllers/testController');
-const { protect, admin } = require('../middleware/authMiddleware');
+const { protect, optionalAuth, adminProtect } = require('../middleware/authMiddleware');
 
-router.get('/', protect, getTests);
+// Public browsing (attach user if logged in for access checks)
+router.get('/', optionalAuth, getTests);
+router.get('/:id', optionalAuth, getTestById);
+
+// Student must be logged in to submit
 router.post('/submit', protect, submitTest);
-router.get('/:id', protect, getTestById);
-router.post('/', protect, admin, createTest);
-router.put('/:id', protect, admin, updateTest);
-router.put('/:id/status', protect, admin, updateTestStatus);
-router.put('/:id/lock', protect, admin, updateTestLockStatus);
-router.put('/:id/leaderboard', protect, admin, updateLeaderboardStatus);
-router.get('/:id/leaderboard', protect, admin, getTestLeaderboardAdmin);
-router.post('/merged-leaderboard', protect, admin, getMergedTestLeaderboardsAdmin);
-router.put('/:id/questions/:questionId', protect, admin, updateQuestion);
-router.delete('/:id/questions/:questionId', protect, admin, deleteQuestion);
-router.delete('/:id', protect, admin, deleteTest);
+
+// Admin routes (Firebase Auth)
+router.post('/', adminProtect, createTest);
+router.put('/:id', adminProtect, updateTest);
+router.put('/:id/status', adminProtect, updateTestStatus);
+router.put('/:id/lock', adminProtect, updateTestLockStatus);
+router.put('/:id/leaderboard', adminProtect, updateLeaderboardStatus);
+router.get('/:id/leaderboard', adminProtect, getTestLeaderboardAdmin);
+router.post('/merged-leaderboard', adminProtect, getMergedTestLeaderboardsAdmin);
+router.put('/:id/questions/:questionId', adminProtect, updateQuestion);
+router.delete('/:id/questions/:questionId', adminProtect, deleteQuestion);
+router.delete('/:id', adminProtect, deleteTest);
 
 module.exports = router;

@@ -7,14 +7,14 @@ import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
 
 export default function Home() {
-    const { user, loading } = useAuth();
+    const { isLoggedIn, loading } = useAuth();
     const router = useRouter();
 
     useEffect(() => {
-        if (!loading && user) {
+        if (!loading && isLoggedIn) {
             router.push('/dashboard');
         }
-    }, [user, loading, router]);
+    }, [isLoggedIn, loading, router]);
 
     if (loading) return null;
 
@@ -61,12 +61,12 @@ export default function Home() {
                         </p>
                     </div>
 
-                    {/* Sign In Button */}
+                    {/* Get Started Button */}
                     <Link
-                        href="/sign-in"
+                        href="/dashboard"
                         className="w-full bg-white hover:bg-violet-50 text-violet-700 font-black text-sm uppercase tracking-widest py-4 px-8 rounded-2xl shadow-2xl shadow-black/30 transition-all hover:-translate-y-0.5 active:scale-95 text-center"
                     >
-                        Sign In to Continue
+                        Get Started
                     </Link>
 
                     <p className="text-white/30 text-xs font-medium">

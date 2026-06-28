@@ -13,18 +13,20 @@ export default function EnrolledVideosPage() {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        if (authLoading || !user) return;
+        if (authLoading) return;
+        if (!user) {
+            router.push('/sign-in?redirect=/profile/enrolled');
+            return;
+        }
         const load = async () => {
             try {
-                const token = await user.getIdToken();
-                setAuthToken(token);
                 const data = await dataService.getMyCourses();
                 setCourses(data);
             } catch (e) { console.error(e); }
             finally { setLoading(false); }
         };
         load();
-    }, [authLoading, user]);
+    }, [authLoading, user, router]);
 
     if (loading) return (
         <div className="flex-1 flex items-center justify-center h-screen bg-gray-50">

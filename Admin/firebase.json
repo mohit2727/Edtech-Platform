@@ -2,13 +2,23 @@
   "hosting": [
     {
       "site": "physical-education-with-ravina-admin",
-      "source": ".",
+      "public": "out",
       "ignore": [
         "firebase.json",
         "**/.*",
         "**/node_modules/**"
       ],
-      "framework": "nextjs"
+      "cleanUrls": true,
+      "rewrites": [
+        {
+          "source": "/dashboard/courses/**",
+          "destination": "/dashboard/courses/id/index.html"
+        },
+        {
+          "source": "**",
+          "destination": "/index.html"
+        }
+      ]
     }
   ]
 }

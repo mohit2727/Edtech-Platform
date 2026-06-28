@@ -7,7 +7,7 @@ import { UserCircle, Phone, MapPin, ChevronRight, LogOut, ShieldCheck, Star, Zap
 import Link from 'next/link';
 
 export default function ProfilePage() {
-    const { user, dbUser, logout, loading: authLoading, refreshDbUser } = useAuth();
+    const { user, logout, loading: authLoading, refreshUser } = useAuth();
     const router = useRouter();
     const [profile, setProfile] = useState<any>(null);
     const [loading, setLoading] = useState(true);
@@ -16,11 +16,13 @@ export default function ProfilePage() {
     const [form, setForm] = useState({ name: '', mobile: '', age: '', city: '', state: '', pincode: '' });
 
     useEffect(() => {
-        if (authLoading || !user) return;
+        if (authLoading) return;
+        if (!user) {
+            router.push('/sign-in?redirect=/profile');
+            return;
+        }
         const load = async () => {
             try {
-                const token = await user.getIdToken();
-                setAuthToken(token);
                 const p = await dataService.getProfile();
                 setProfile(p);
                 setForm({ name: p.name || '', mobile: p.mobile || '', age: p.age || '', city: p.city || '', state: p.state || '', pincode: p.pincode || '' });
@@ -28,16 +30,14 @@ export default function ProfilePage() {
             finally { setLoading(false); }
         };
         load();
-    }, [authLoading, user]);
+    }, [authLoading, user, router]);
 
     const handleSave = async () => {
         if (!user) return;
         setSaving(true);
         try {
-            const token = await user.getIdToken();
-            setAuthToken(token);
             const updated = await dataService.updateProfile(form);
-            await refreshDbUser();
+            await refreshUser();
             setProfile(updated);
             setForm({ name: updated.name || '', mobile: updated.mobile || '', age: updated.age || '', city: updated.city || '', state: updated.state || '', pincode: updated.pincode || '' });
             setShowEdit(false);
@@ -45,16 +45,16 @@ export default function ProfilePage() {
         finally { setSaving(false); }
     };
 
-    const displayName = dbUser?.name || profile?.name || 'Student';
+    const displayName = user?.name || profile?.name || 'Student';
     const initials = displayName.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase() || 'S';
 
-    if (loading && !dbUser) return (
+    if (loading && !user) return (
         <div className="flex-1 flex items-center justify-center h-screen bg-gray-50">
             <div className="w-10 h-10 border-4 border-violet-500 border-t-transparent rounded-full animate-spin" />
         </div>
     );
 
-    const activeProfile = profile || dbUser;
+    const activeProfile = profile || user;
 
     return (
         <div className="flex flex-col min-h-full bg-gray-50">
@@ -180,7 +180,7 @@ export default function ProfilePage() {
                         </Link>
                     </div>
 
-                    <button onClick={() => { if (confirm('Are you sure you want to logout?')) logout().then(() => router.push('/sign-in')); }}
+                    <button onClick={() => { if (confirm('Are you sure you want to logout?')) { logout(); router.push('/sign-in'); } }}
                         className="w-full h-14 bg-rose-50 rounded-2xl flex items-center px-4 border border-rose-100 mt-6 group card-hover">
                         <div className="w-10 h-10 rounded-xl bg-rose-100 flex items-center justify-center text-rose-600">
                             <LogOut size={18} />

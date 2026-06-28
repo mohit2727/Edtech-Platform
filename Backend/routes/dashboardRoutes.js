@@ -1,8 +1,10 @@
 const express = require('express');
 const router = express.Router();
 const { getDashboardStats } = require('../controllers/dashboardController');
-const { protect } = require('../middleware/authMiddleware');
+const { optionalAuth } = require('../middleware/authMiddleware');
 
-router.get('/', protect, getDashboardStats);
+// Dashboard stats — works for logged-in users (shows personalized data)
+// and guests (shows generic stats)
+router.get('/', optionalAuth, getDashboardStats);
 
 module.exports = router;

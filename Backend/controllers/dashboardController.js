@@ -6,25 +6,30 @@ const TestAttempt = require('../models/testAttemptModel');
 
 // @desc    Get dashboard stats
 // @route   GET /api/dashboard
-// @access  Private
+// @access  Public (optionalAuth — personalized if logged in)
 const getDashboardStats = asyncHandler(async (req, res) => {
-    const user = await User.findById(req.user._id);
-    
-    // 1. Total Enrolled Items (Courses + QuizPlaylists)
-    const enrolledCoursesCount = user ? (user.enrolledCourses?.length || 0) : 0;
-    const purchasedPlaylistsCount = user ? (user.purchasedQuizzes?.length || 0) : 0; // assuming this field stores QuizPlaylist IDs as per userController
-    const totalEnrolled = enrolledCoursesCount + purchasedPlaylistsCount;
+    let totalEnrolled = 0;
+    let quizzesTakenCount = 0;
 
-    // 2. Total Available Playlists (Active)
+    // If user is logged in, show personalized stats
+    if (req.user) {
+        const user = await User.findById(req.user._id);
+        if (user) {
+            const enrolledCoursesCount = user.enrolledCourses?.length || 0;
+            const purchasedPlaylistsCount = user.purchasedQuizzes?.length || 0;
+            totalEnrolled = enrolledCoursesCount + purchasedPlaylistsCount;
+
+            const uniqueTests = await TestAttempt.distinct('test', { user: req.user._id });
+            quizzesTakenCount = uniqueTests.length;
+        }
+    }
+
+    // Public stats (always available)
     const activeCoursesCount = await Course.countDocuments({ isActive: true });
     const activeQuizPlaylistsCount = await QuizPlaylist.countDocuments({ isActive: true });
     const totalPlaylistsAvailable = activeCoursesCount + activeQuizPlaylistsCount;
 
-    // 3. Quizzes Taken (Unique tests attempted)
-    const uniqueTests = await TestAttempt.distinct('test', { user: req.user._id });
-    const quizzesTakenCount = uniqueTests.length;
-
-    // 4. Latest Content (Merged newest Courses and QuizPlaylists)
+    // Latest Content
     const newestCourses = await Course.find({ isActive: true })
         .sort({ createdAt: -1 })
         .limit(4)
@@ -35,7 +40,6 @@ const getDashboardStats = asyncHandler(async (req, res) => {
         .limit(4)
         .lean();
 
-    // Map types for frontend differentiation
     const coursesMapped = newestCourses.map(c => ({ ...c, contentType: 'video' }));
     const quizPlaylistsMapped = newestQuizPlaylists.map(q => ({ ...q, contentType: 'quiz' }));
 

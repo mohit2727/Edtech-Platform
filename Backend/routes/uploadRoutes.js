@@ -3,7 +3,7 @@ const router = express.Router();
 const multer = require('multer');
 const path = require('path');
 const { uploadAndGenerateQuiz } = require('../controllers/uploadController');
-const { protect, admin } = require('../middleware/authMiddleware');
+const { protect, adminProtect } = require('../middleware/authMiddleware');
 
 // Configure Multer
 const storage = multer.diskStorage({
@@ -48,7 +48,7 @@ const uploadImage = multer({
     },
 });
 
-router.post('/quiz', protect, admin, upload.single('file'), uploadAndGenerateQuiz);
+router.post('/quiz', adminProtect, upload.single('file'), uploadAndGenerateQuiz);
 
 router.post('/image', protect, uploadImage.single('image'), (req, res) => {
     if (!req.file) {

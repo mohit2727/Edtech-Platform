@@ -7,12 +7,12 @@ const {
     updateAnnouncement,
     deleteAnnouncement,
 } = require('../controllers/announcementController');
-const { protect, admin } = require('../middleware/authMiddleware');
+const { adminProtect } = require('../middleware/authMiddleware');
 
-router.get('/', getAnnouncements); // Public (or protect if you only want logged-in users to see them)
-router.get('/all', protect, admin, getAllAnnouncements);
-router.post('/', protect, admin, createAnnouncement);
-router.put('/:id', protect, admin, updateAnnouncement);
-router.delete('/:id', protect, admin, deleteAnnouncement);
+router.get('/', getAnnouncements); // Public
+router.get('/all', adminProtect, getAllAnnouncements);
+router.post('/', adminProtect, createAnnouncement);
+router.put('/:id', adminProtect, updateAnnouncement);
+router.delete('/:id', adminProtect, deleteAnnouncement);
 
 module.exports = router;

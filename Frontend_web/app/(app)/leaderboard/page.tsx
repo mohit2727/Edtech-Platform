@@ -10,11 +10,9 @@ export default function LeaderboardPage() {
     const [loading, setLoading] = useState(true);
 
     const load = async () => {
-        if (authLoading || !user) return;
+        if (authLoading) return;
         setLoading(true);
         try {
-            const token = await user.getIdToken();
-            setAuthToken(token);
             const data = await dataService.getLeaderboard();
             setBoard(data);
         } catch (e) { console.error(e); }

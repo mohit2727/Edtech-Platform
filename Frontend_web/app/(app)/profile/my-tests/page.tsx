@@ -12,18 +12,20 @@ export default function MyTestsPage() {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        if (authLoading || !user) return;
+        if (authLoading) return;
+        if (!user) {
+            router.push('/sign-in?redirect=/profile/my-tests');
+            return;
+        }
         const load = async () => {
             try {
-                const token = await user.getIdToken();
-                setAuthToken(token);
                 const data = await dataService.getMyTests();
                 setAttempts(data);
             } catch (e) { console.error(e); }
             finally { setLoading(false); }
         };
         load();
-    }, [authLoading, user]);
+    }, [authLoading, user, router]);
 
     if (loading) return (
         <div className="flex-1 flex items-center justify-center h-screen bg-gray-50">

@@ -14,12 +14,14 @@ const userSchema = mongoose.Schema(
         },
         email: {
             type: String,
-            required: true,
+            required: false,
             unique: true,
+            sparse: true, // Allow multiple users without email
         },
         mobile: {
             type: String,
-            required: false,
+            required: true,
+            unique: true,
         },
         age: {
             type: String,
