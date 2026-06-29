@@ -16,10 +16,11 @@ const {
     deleteQuestion
 } = require('../controllers/testController');
 const { protect, optionalAuth, adminProtect } = require('../middleware/authMiddleware');
+const { cacheMiddleware } = require('../middleware/cacheMiddleware');
 
 // Public browsing (attach user if logged in for access checks)
-router.get('/', optionalAuth, getTests);
-router.get('/:id', optionalAuth, getTestById);
+router.get('/', optionalAuth, cacheMiddleware(120), getTests);
+router.get('/:id', optionalAuth, cacheMiddleware(120), getTestById);
 
 // Student must be logged in to submit
 router.post('/submit', protect, submitTest);

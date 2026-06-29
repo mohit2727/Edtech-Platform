@@ -53,14 +53,24 @@ const optionalAuth = asyncHandler(async (req, res, next) => {
 
     if (token) {
         try {
+            // Try standard JWT first (for students)
             const decoded = jwt.verify(token, process.env.JWT_SECRET);
             const user = await User.findById(decoded.id);
             if (user) {
                 req.user = user;
             }
         } catch (error) {
-            // Token invalid — that's fine, just continue as guest
-            console.log('Optional auth: invalid token, continuing as guest');
+            // Try Firebase ID token if standard JWT fails (for admins)
+            try {
+                const decodedToken = await admin.auth().verifyIdToken(token);
+                const firebaseUid = decodedToken.uid;
+                const user = await User.findOne({ firebaseUid });
+                if (user) {
+                    req.user = user;
+                }
+            } catch (firebaseError) {
+                console.log('Optional auth: invalid token on both JWT and Firebase, continuing as guest');
+            }
         }
     }
 

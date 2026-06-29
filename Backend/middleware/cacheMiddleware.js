@@ -8,6 +8,11 @@ const cacheMiddleware = (ttlSeconds = 120) => (req, res, next) => {
     // Only cache GET requests
     if (req.method !== 'GET') return next();
 
+    // Bypass cache for admin users
+    if (req.user && req.user.role === 'admin') {
+        return next();
+    }
+
     const key = req.originalUrl;
     const cached = cache.get(key);
 

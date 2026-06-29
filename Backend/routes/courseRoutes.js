@@ -12,10 +12,11 @@ const {
     updateLesson,
 } = require('../controllers/courseController');
 const { optionalAuth, adminProtect } = require('../middleware/authMiddleware');
+const { cacheMiddleware } = require('../middleware/cacheMiddleware');
 
 // Public browsing (attach user if logged in for enrollment checks)
-router.get('/', optionalAuth, getCourses);
-router.get('/:id', optionalAuth, getCourseById);
+router.get('/', optionalAuth, cacheMiddleware(120), getCourses);
+router.get('/:id', optionalAuth, cacheMiddleware(120), getCourseById);
 
 // Admin routes (Firebase Auth)
 router.post('/', adminProtect, createCourse);

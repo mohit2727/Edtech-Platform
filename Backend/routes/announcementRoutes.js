@@ -8,8 +8,9 @@ const {
     deleteAnnouncement,
 } = require('../controllers/announcementController');
 const { adminProtect } = require('../middleware/authMiddleware');
+const { cacheMiddleware } = require('../middleware/cacheMiddleware');
 
-router.get('/', getAnnouncements); // Public
+router.get('/', cacheMiddleware(120), getAnnouncements); // Public
 router.get('/all', adminProtect, getAllAnnouncements);
 router.post('/', adminProtect, createAnnouncement);
 router.put('/:id', adminProtect, updateAnnouncement);

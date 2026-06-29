@@ -61,13 +61,13 @@ const announcementRoutes = require('./routes/announcementRoutes');
 const paymentRoutes = require('./routes/paymentRoutes');
 const quizPlaylistRoutes = require('./routes/quizPlaylistRoutes');
 
-// Public cached routes (2 min TTL)
-app.use('/api/courses', cacheMiddleware(120), courseRoutes);
-app.use('/api/announcements', cacheMiddleware(120), announcementRoutes);
+// Public cached routes (2 min TTL applied at route level)
+app.use('/api/courses', courseRoutes);
+app.use('/api/announcements', announcementRoutes);
 // Leaderboard cached 30s
 app.use('/api/users', userRoutes);
 app.use('/api/dashboard', dashboardRoutes);
-app.use('/api/tests', cacheMiddleware(120), testRoutes);
+app.use('/api/tests', testRoutes);
 app.use('/api/upload', uploadRoutes);
 app.use('/api/payments', paymentRoutes);
 app.use('/api/quiz-playlists', quizPlaylistRoutes);
