@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const {
     loginOrRegister,
+    adminLogin,
     getUserProfile,
     getLeaderboard,
     getDashboardStats,
@@ -21,7 +22,9 @@ const { protect, optionalAuth, adminProtect } = require('../middleware/authMiddl
 
 // Public routes
 router.post('/login', loginOrRegister);
+router.post('/admin-login', adminLogin);
 router.get('/leaderboard', optionalAuth, getLeaderboard);
+
 
 // Student protected routes (JWT)
 router.route('/profile')

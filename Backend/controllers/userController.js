@@ -519,8 +519,54 @@ const createUserAdmin = asyncHandler(async (req, res) => {
     }
 });
 
+// @desc    Admin login by email and password (local)
+// @route   POST /api/users/admin-login
+// @access  Public
+const adminLogin = asyncHandler(async (req, res) => {
+    const { email, password } = req.body;
+
+    if (!email || !password) {
+        res.status(400);
+        throw new Error('Email and password are required');
+    }
+
+    const adminEmail = process.env.ADMIN_EMAIL || 'ravinaaacharya2345@gmail.com';
+    const adminPassword = process.env.ADMIN_PASSWORD || 'admin123';
+
+    if (email.toLowerCase() === adminEmail.toLowerCase() && password === adminPassword) {
+        // Find or create admin in MongoDB
+        let user = await User.findOne({ email: adminEmail.toLowerCase() });
+
+        if (!user) {
+            user = await User.create({
+                name: 'Admin',
+                email: adminEmail.toLowerCase(),
+                mobile: '0000000000',
+                role: 'admin',
+            });
+        }
+
+        // Generate JWT
+        const token = generateToken(user._id);
+
+        res.json({
+            token,
+            user: {
+                _id: user._id,
+                name: user.name,
+                email: user.email,
+                role: user.role,
+            },
+        });
+    } else {
+        res.status(401);
+        throw new Error('Invalid email or password');
+    }
+});
+
 module.exports = {
     loginOrRegister,
+    adminLogin,
     getUserProfile,
     getLeaderboard,
     getDashboardStats,
@@ -536,3 +582,4 @@ module.exports = {
     revokeUserAccess,
     createUserAdmin,
 };
+

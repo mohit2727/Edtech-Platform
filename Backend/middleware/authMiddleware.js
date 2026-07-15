@@ -77,8 +77,8 @@ const optionalAuth = asyncHandler(async (req, res, next) => {
     next();
 });
 
-// ─── Admin Auth: Firebase-based ──────────────────────────────────────────────
-// Verifies Firebase ID token AND checks admin role. Used for admin panel routes.
+// ─── Admin Auth: Firebase/Local JWT-based ───────────────────────────────────
+// Verifies local JWT first, with a fallback to Firebase ID token verification.
 const adminProtect = asyncHandler(async (req, res, next) => {
     let token;
 
@@ -94,8 +94,25 @@ const adminProtect = asyncHandler(async (req, res, next) => {
         throw new Error('Not authorized, no token');
     }
 
+    // Try verifying local JWT first
     try {
-        // Verify the Firebase ID token
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        const user = await User.findById(decoded.id);
+
+        if (user) {
+            if (user.role !== 'admin') {
+                res.status(403);
+                throw new Error('Not authorized as an admin');
+            }
+            req.user = user;
+            return next();
+        }
+    } catch (localError) {
+        console.log('Local JWT verification failed, attempting Firebase verification...');
+    }
+
+    // Fallback to Firebase verification (for backward compatibility)
+    try {
         const decodedToken = await admin.auth().verifyIdToken(token);
         const firebaseUid = decodedToken.uid;
 
@@ -115,11 +132,12 @@ const adminProtect = asyncHandler(async (req, res, next) => {
         req.user = user;
         next();
     } catch (error) {
-        console.error('Firebase admin auth error:', error.message);
+        console.error('Firebase and Local admin auth both failed:', error.message);
         if (!res.statusCode || res.statusCode === 200) res.status(401);
-        throw new Error(error.message || 'Not authorized: Invalid token');
+        throw new Error('Not authorized: Invalid or expired token');
     }
 });
+
 
 // ─── Role Check: Admin only ─────────────────────────────────────────────────
 const adminCheck = (req, res, next) => {
